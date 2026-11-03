@@ -158,7 +158,7 @@
           </div>
           <div class="fg full">
             <label for="driver">Nama driver *</label>
-            <select id="driver" required onchange="cekLainnya()">
+            <select id="driver" required onchange="cekLainnya(); simpanDriverPref()">
               <option value="">Pilih driver</option>
               <option>ALFIAN</option><option>ALIF</option><option>IMAM</option><option>SUGANDA</option>
               <option>WAHYU</option><option>ARDIAN</option><option>JEFRI</option><option>DANI</option>
@@ -167,7 +167,7 @@
           </div>
           <div class="fg full hidden" id="boxLainnya">
             <label for="driverLainnya">Nama driver lainnya *</label>
-            <input type="text" id="driverLainnya" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+            <input type="text" id="driverLainnya" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase(); simpanDriverPref()">
           </div>
           <div class="fg full">
             <label for="nominal">Nominal faktur (Rp) *</label>
@@ -224,8 +224,6 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   const DRIVERS = ["ALFIAN","ALIF","IMAM","SUGANDA","WAHYU","ARDIAN","JEFRI","DANI","SURYA","RIFKY"];
 
-  let kodeAkses = "";
-  try { kodeAkses = localStorage.getItem("kodeAkses") || ""; } catch (e) {}
   let dataRekap = [];
   let infoPm = null;
   let scanner = null;       // kamera langsung
@@ -251,24 +249,29 @@
   }
 
   async function api(body) {
-    if (!kodeAkses) {
-      kodeAkses = (prompt("Masukkan kode akses:") || "").trim();
-      if (!kodeAkses) throw new Error("Kode akses diperlukan.");
-    }
     // Tanpa header Content-Type supaya text/plain (tidak memicu preflight CORS)
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(Object.assign({ kode: kodeAkses }, body)) });
-    const data = await res.json();
-    if (data.auth === false) {
-      kodeAkses = "";
-      try { localStorage.removeItem("kodeAkses"); } catch (e) {}
-      throw new Error("Kode akses salah. Coba lagi.");
-    }
-    try { localStorage.setItem("kodeAkses", kodeAkses); } catch (e) {}
-    return data;
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+    return await res.json();
+  }
+
+  // Driver dipilih sekali, diingat sampai diganti (juga setelah reload halaman)
+  function simpanDriverPref() {
+    try { localStorage.setItem("driverPref", JSON.stringify({ d: $("driver").value, l: $("driverLainnya").value })); } catch (e) {}
+  }
+  function pulihDriverPref() {
+    try {
+      const p = JSON.parse(localStorage.getItem("driverPref") || "null");
+      if (p && p.d) {
+        $("driver").value = p.d;
+        cekLainnya();
+        if ($("driver").value === "LAINNYA") $("driverLainnya").value = p.l || "";
+      }
+    } catch (e) {}
   }
 
   window.onload = function () {
     $("tanggal").value = hariIni();
+    pulihDriverPref();
     $("pm").addEventListener("keydown", function (e) {   // scanner USB/Bluetooth kirim Enter
       if (e.key === "Enter") { e.preventDefault(); cekPm(true); }
     });
@@ -457,6 +460,7 @@
         $("form").reset();
         $("tanggal").value = hariIni();
         cekLainnya();
+        pulihDriverPref();
         $("pmInfo").innerHTML = "";
         infoPm = null;
         lastText = "";   // PM yang sama boleh discan lagi
