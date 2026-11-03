@@ -95,6 +95,8 @@
     .badge { display:inline-block; padding:3px 9px; border-radius:999px; font-size:.78rem; font-weight:600; background:var(--red-100); color:var(--red-800); white-space:nowrap; }
     .edit { background:#fff; color:var(--red-700); border:1px solid #fca5a5; padding:5px 12px; border-radius:8px; font:inherit; font-weight:600; font-size:.8rem; cursor:pointer; }
     .edit:hover { background:var(--red-700); color:#fff; }
+    .q-btn { margin-left:6px; padding:3px 10px; border-radius:7px; border:1px solid #fca5a5; background:#fff; color:var(--red-700); font:inherit; font-size:.8rem; font-weight:600; cursor:pointer; }
+    .q-run { color:#92400e; } .q-wait { color:var(--ink-3); }
     .hidden { display:none !important; }
     @media (max-width:640px) { .grid { grid-template-columns:1fr; } .full { grid-column:span 1; } .kpi { grid-template-columns:1fr 1fr; } }
   </style>
@@ -113,7 +115,7 @@
 
   <!-- INPUT -->
   <div class="view active" id="viewInput">
-    <form id="form" onsubmit="event.preventDefault(); simpan(false);">
+    <form id="form" onsubmit="event.preventDefault(); simpan();">
 
       <!-- Scanner -->
       <div class="card">
@@ -171,7 +173,7 @@
           </div>
           <div class="fg full">
             <label for="nominal">Nominal faktur (Rp) *</label>
-            <input type="number" id="nominal" min="0" inputmode="numeric" placeholder="Contoh: 1500000" required>
+            <input type="text" id="nominal" inputmode="numeric" placeholder="Contoh: 1,500,000" autocomplete="off" required oninput="formatNominal(this)">
           </div>
           <div class="fg full">
             <label for="alasan">Alasan batal *</label>
@@ -190,6 +192,10 @@
 
       <button type="submit" class="submit" id="btnSimpan">Simpan</button>
       <div class="msg" id="msg"></div>
+      <div class="card hidden" id="antreanCard" style="margin-top:12px">
+        <h2>Antrean simpan</h2>
+        <ul class="hist" id="antrean"></ul>
+      </div>
     </form>
   </div>
 
@@ -435,39 +441,96 @@
     } catch (e) { setInfo("err", esc(e.message)); }
   }
 
-  /* ===== Simpan ===== */
+  /* ===== Format nominal ===== */
+  function fmtAngka(n) {
+    const d = String(n == null ? "" : n).replace(/\D/g, "");
+    return d ? Number(d).toLocaleString("en-US") : "";
+  }
+  function formatNominal(el) { el.value = fmtAngka(el.value); }
+
+  /* ===== Simpan lewat antrean (scan berikutnya tidak perlu menunggu) ===== */
+  let antrean = [], berjalan = false, seq = 0;
+
   function tampilMsg(cls, text) { const m = $("msg"); m.className = "msg " + cls; m.textContent = text; }
 
-  async function simpan(timpa) {
+  function simpan() {
     const pm = normPm($("pm").value);
     let driver = $("driver").value;
     if (driver === "LAINNYA") driver = $("driverLainnya").value.trim().toUpperCase();
+    const nominal = String($("nominal").value).replace(/\D/g, "");
 
     if (infoPm && infoPm.found === false) { tampilMsg("err", pm + " tidak ditemukan di Master Data."); return; }
-    $("btnSimpan").disabled = true;
+    let timpa = false;
+    if (infoPm && infoPm.found && infoPm.sudahAda) {
+      if (!confirm(pm + " sudah punya data pembatalan. Timpa dengan data baru?")) return;
+      timpa = true;
+    }
     $("msg").className = "msg";
-    try {
-      const r = await api({
-        action: "simpan", timpa: timpa, pm: pm,
-        tanggal: $("tanggal").value, driver: driver,
-        nominal: $("nominal").value, alasan: $("alasan").value
-      });
-      if (r.konfirmasi) {
-        if (confirm(r.message)) { $("btnSimpan").disabled = false; return simpan(true); }
-        tampilMsg("err", "Dibatalkan, data tidak diubah.");
-      } else if (r.success) {
-        tampilMsg("ok", r.message + (r.polaKosong ? " (Kronologi/CAPA kosong: alasan ini belum punya pola.)" : ""));
-        $("form").reset();
-        $("tanggal").value = hariIni();
-        cekLainnya();
-        pulihDriverPref();
-        $("pmInfo").innerHTML = "";
-        infoPm = null;
-        lastText = "";   // PM yang sama boleh discan lagi
-      } else tampilMsg("err", r.message);
-    } catch (e) { tampilMsg("err", "Gagal: " + e.message); }
-    $("btnSimpan").disabled = false;
+
+    antrean.push({
+      id: ++seq, pm: pm,
+      toko: (infoPm && infoPm.pm === pm) ? infoPm.namaToko : "",
+      status: "tunggu", pesan: "",
+      payload: { action: "simpan", timpa: timpa, pm: pm, tanggal: $("tanggal").value, driver: driver, nominal: nominal, alasan: $("alasan").value }
+    });
+
+    // Form langsung dikosongkan supaya bisa scan berikutnya
+    $("form").reset();
+    $("tanggal").value = hariIni();
+    cekLainnya();
+    pulihDriverPref();
+    $("pmInfo").innerHTML = "";
+    $("hasilKosong").classList.remove("hidden");
+    infoPm = null;
+    lastText = "";
+
+    renderAntrean();
+    jalankanAntrean();
   }
+
+  // Satu per satu secara berurutan (supaya tidak bentrok saat menulis ke sheet)
+  async function jalankanAntrean() {
+    if (berjalan) return;
+    berjalan = true;
+    while (true) {
+      const it = antrean.find(x => x.status === "tunggu");
+      if (!it) break;
+      it.status = "proses"; renderAntrean();
+      try {
+        const r = await api(it.payload);
+        if (r.konfirmasi) { it.status = "konfirmasi"; it.pesan = r.message; }
+        else if (r.success) { it.status = "ok"; it.pesan = r.message + (r.polaKosong ? " (Kronologi/CAPA kosong: alasan belum ada di sheet Pola Alasan)" : ""); }
+        else { it.status = "gagal"; it.pesan = r.message; }
+      } catch (e) { it.status = "gagal"; it.pesan = "Koneksi gagal: " + e.message; }
+      renderAntrean();
+    }
+    berjalan = false;
+  }
+
+  function ulangiItem(id) { const it = antrean.find(x => x.id === id); if (it) { it.status = "tunggu"; renderAntrean(); jalankanAntrean(); } }
+  function timpaItem(id) { const it = antrean.find(x => x.id === id); if (it) { it.payload.timpa = true; ulangiItem(id); } }
+  function buangItem(id) { antrean = antrean.filter(x => x.id !== id); renderAntrean(); }
+
+  function renderAntrean() {
+    // Simpan hanya 10 item terakhir yang sudah selesai
+    const selesai = antrean.filter(x => x.status === "ok");
+    if (selesai.length > 10) antrean = antrean.filter(x => x.status !== "ok" || selesai.slice(-10).includes(x));
+    $("antreanCard").classList.toggle("hidden", antrean.length === 0);
+    $("antrean").innerHTML = antrean.slice().reverse().map(function (x) {
+      let st = "";
+      if (x.status === "tunggu") st = "<span class='q-wait'>menunggu…</span>";
+      else if (x.status === "proses") st = "<span class='q-run'>menyimpan…</span>";
+      else if (x.status === "ok") st = "<span class='st-ok'>✓ tersimpan</span>";
+      else if (x.status === "konfirmasi") st = "<span class='st-no'>sudah ada data</span> <button type='button' class='q-btn' onclick='timpaItem(" + x.id + ")'>Timpa</button><button type='button' class='q-btn' onclick='buangItem(" + x.id + ")'>Batal</button>";
+      else st = "<span class='st-no'>✗ " + esc(x.pesan) + "</span> <button type='button' class='q-btn' onclick='ulangiItem(" + x.id + ")'>Ulangi</button><button type='button' class='q-btn' onclick='buangItem(" + x.id + ")'>Buang</button>";
+      return "<li><span><b>" + esc(x.pm) + "</b>" + (x.toko ? " · " + esc(x.toko) : "") + "</span><span>" + st + "</span></li>";
+    }).join("");
+  }
+
+  // Cegah tab ditutup saat masih ada yang belum tersimpan
+  window.addEventListener("beforeunload", function (e) {
+    if (antrean.some(x => x.status !== "ok")) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   /* ===== Rekap ===== */
   async function muatRekap() {
@@ -510,7 +573,7 @@
     switchTab("input");
     $("tanggal").value = x.tanggal;
     $("pm").value = x.pm;
-    $("nominal").value = x.nominal;
+    $("nominal").value = fmtAngka(x.nominal);
     $("alasan").value = x.alasan;
     if (DRIVERS.includes(x.driver)) { $("driver").value = x.driver; cekLainnya(); }
     else { $("driver").value = "LAINNYA"; cekLainnya(); $("driverLainnya").value = x.driver; }
