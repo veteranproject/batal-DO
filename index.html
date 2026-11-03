@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal Batal COD</title>
+  <style>
+    :root {
+      --red-700:#b91c1c; --red-800:#991b1b; --red-900:#7f1d1d; --red-100:#fee2e2; --red-50:#fef2f2;
+      --ink:#1c1917; --ink-2:#57534e; --ink-3:#a8a29e; --line:#e7e5e4; --bg:#f5f5f4; --card:#fff;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:0 12px 40px; background:var(--bg); color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-size:15px; line-height:1.45; }
+    .app { max-width:980px; margin:0 auto; }
+    header { padding:20px 4px 14px; }
+    h1 { margin:0; font-size:1.35rem; font-weight:800; color:var(--red-800); }
+    header p { margin:2px 0 0; color:var(--ink-2); font-size:.88rem; }
+
+    .tabs { display:flex; gap:4px; background:var(--card); border:1px solid var(--line); padding:4px; border-radius:12px; margin-bottom:16px; position:sticky; top:8px; z-index:20; }
+    .tab { flex:1; border:none; padding:10px 8px; border-radius:9px; font:inherit; font-weight:600; cursor:pointer; background:transparent; color:var(--ink-2); }
+    .tab.active { background:var(--red-700); color:#fff; }
+    .view { display:none; } .view.active { display:block; }
+
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:12px; }
+    .card h2 { margin:0 0 12px; font-size:.95rem; color:var(--red-800); display:flex; align-items:center; gap:8px; }
+    .card h2::before { content:""; width:4px; height:16px; border-radius:2px; background:var(--red-700); }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .full { grid-column:span 2; }
+    .fg { display:flex; flex-direction:column; }
+    label { font-size:.82rem; font-weight:600; color:var(--ink-2); margin-bottom:5px; }
+    input, select { width:100%; padding:10px 12px; border:1px solid #d6d3d1; border-radius:9px; font:inherit; background:#fff; color:var(--ink); }
+    input:focus, select:focus, button:focus-visible { outline:2px solid var(--red-700); outline-offset:1px; }
+    #pm { text-transform:uppercase; font-weight:700; letter-spacing:.03em; }
+
+    /* ===== Scanner ===== */
+    .cam { position:relative; height:190px; border-radius:12px; overflow:hidden; background:#1c1917; }
+    #reader { position:absolute; inset:0; border:none !important; }
+    #reader video { width:100% !important; height:100% !important; object-fit:cover; }
+    #reader img, #reader canvas { display:none !important; }
+    .frame { position:absolute; left:10%; right:10%; top:50%; height:110px; transform:translateY(-50%); pointer-events:none; }
+    .frame i { position:absolute; width:34px; height:34px; border:4px solid #fca5a5; }
+    .frame i:nth-child(1){ top:0; left:0; border-right:none; border-bottom:none; border-radius:8px 0 0 0; }
+    .frame i:nth-child(2){ top:0; right:0; border-left:none; border-bottom:none; border-radius:0 8px 0 0; }
+    .frame i:nth-child(3){ bottom:0; left:0; border-right:none; border-top:none; border-radius:0 0 0 8px; }
+    .frame i:nth-child(4){ bottom:0; right:0; border-left:none; border-top:none; border-radius:0 0 8px 0; }
+    .frame::after { content:""; position:absolute; left:6px; right:6px; height:2px; background:#fecaca; box-shadow:0 0 8px #f87171; animation:sweep 1.8s ease-in-out infinite; }
+    @keyframes sweep { 0%,100%{ top:6px; } 50%{ top:calc(100% - 8px); } }
+    .cam-msg { position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; color:#fff; padding:16px; font-size:.88rem; background:rgba(28,25,23,.85); }
+    .cam-msg.show { display:flex; }
+    .photo-panel { display:none; border:1px dashed #f87171; background:var(--red-50); border-radius:12px; padding:22px 14px; text-align:center; }
+    .photo-panel.show { display:block; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .chip { padding:6px 12px; border-radius:999px; border:1px solid var(--red-700); background:#fff; color:var(--red-800); font:inherit; font-size:.85rem; font-weight:600; cursor:pointer; }
+    .chip.count { background:var(--red-100); border-color:var(--red-100); cursor:default; }
+    .chip.right { margin-left:auto; }
+    .manual { display:flex; gap:8px; margin-top:12px; }
+    .btn-go { padding:10px 20px; border:none; background:var(--red-700); color:#fff; border-radius:10px; font:inherit; font-weight:700; cursor:pointer; }
+    .btn-go:hover { background:var(--red-800); }
+
+    .info { margin-top:10px; padding:10px 12px; border-radius:9px; font-size:.9rem; }
+    .info.ok { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+    .info.warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+    .info.err { background:var(--red-50); border:1px solid #fca5a5; color:var(--red-900); }
+    .muted { color:var(--ink-2); font-size:.9rem; margin:0; }
+    .hist { list-style:none; margin:10px 0 0; padding:0; font-size:.85rem; color:var(--ink-2); }
+    .hist li { padding:5px 0; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; }
+    .hist b { color:var(--ink); }
+    .st-ok { color:#166534; } .st-no { color:var(--red-700); }
+
+    .submit { width:100%; padding:14px; background:var(--red-700); color:#fff; border:none; border-radius:10px; font:inherit; font-size:1rem; font-weight:700; cursor:pointer; }
+    .submit:hover { background:var(--red-800); } .submit:disabled { background:var(--ink-3); cursor:not-allowed; }
+    .msg { padding:11px 13px; border-radius:9px; margin-top:12px; display:none; font-size:.9rem; }
+    .msg.ok { display:block; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+    .msg.err { display:block; background:var(--red-50); border:1px solid #fca5a5; color:var(--red-900); }
+
+    /* Rekap */
+    .kpi { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+    .kpi div { background:var(--card); border:1px solid var(--line); padding:12px 14px; border-radius:12px; }
+    .kpi div.main { background:var(--red-700); border-color:var(--red-700); color:#fff; }
+    .kpi small { display:block; font-size:.78rem; font-weight:600; color:var(--ink-2); margin-bottom:4px; }
+    .kpi .main small { color:#fecaca; }
+    .kpi b { font-size:1.1rem; }
+    .filters { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .filters input { width:auto; flex:1; min-width:140px; }
+    .btn { padding:10px 14px; border:1px solid #d6d3d1; background:#fff; border-radius:9px; font:inherit; font-weight:600; cursor:pointer; color:var(--ink-2); white-space:nowrap; }
+    .btn:hover { background:var(--red-50); color:var(--red-800); }
+    .tablewrap { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:.88rem; }
+    th { background:var(--red-50); color:var(--red-900); font-size:.8rem; padding:11px 12px; text-align:left; border-bottom:1px solid #fecaca; white-space:nowrap; }
+    td { padding:11px 12px; border-bottom:1px solid var(--line); }
+    tbody tr:last-child td { border-bottom:none; }
+    td.num, th.num { text-align:right; white-space:nowrap; }
+    td.empty { text-align:center; color:var(--ink-2); padding:28px; }
+    .badge { display:inline-block; padding:3px 9px; border-radius:999px; font-size:.78rem; font-weight:600; background:var(--red-100); color:var(--red-800); white-space:nowrap; }
+    .edit { background:#fff; color:var(--red-700); border:1px solid #fca5a5; padding:5px 12px; border-radius:8px; font:inherit; font-weight:600; font-size:.8rem; cursor:pointer; }
+    .edit:hover { background:var(--red-700); color:#fff; }
+    .hidden { display:none !important; }
+    @media (max-width:640px) { .grid { grid-template-columns:1fr; } .full { grid-column:span 1; } .kpi { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Portal Batal COD</h1>
+    <p>Scan nomor PM, isi data, otomatis masuk ke Master Data dan Pengajuan Batal COD.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" id="tabInput" onclick="switchTab('input')">Input batal</button>
+    <button class="tab" id="tabRekap" onclick="switchTab('rekap')">Rekap</button>
+  </div>
+
+  <!-- INPUT -->
+  <div class="view active" id="viewInput">
+    <form id="form" onsubmit="event.preventDefault(); simpan(false);">
+
+      <!-- Scanner -->
+      <div class="card">
+        <div class="cam" id="camBox">
+          <div id="reader"></div>
+          <div class="frame"><i></i><i></i><i></i><i></i></div>
+          <div class="cam-msg" id="camMsg"></div>
+        </div>
+        <div class="photo-panel" id="photoPanel">
+          <p class="muted" style="margin-bottom:10px">Foto barcode nomor PM dengan jelas, lalu aplikasi akan membacanya.</p>
+          <button type="button" class="btn-go" onclick="$('fotoInput').click()">📷 Ambil / pilih foto</button>
+          <input type="file" id="fotoInput" accept="image/*" capture="environment" class="hidden" onchange="scanFoto(this)">
+          <div id="readerFile" class="hidden"></div>
+        </div>
+
+        <div class="chips">
+          <span class="chip count" id="cnt">0 discan</span>
+          <button type="button" class="chip" id="chipSuara" onclick="toggleSuara()">Suara: nyala</button>
+          <button type="button" class="chip right" id="chipMode" onclick="gantiMode()">Ganti cara scan</button>
+        </div>
+
+        <div class="manual">
+          <input type="text" id="pm" placeholder="Ketik nomor PM jika barcode tidak terbaca" required autocomplete="off">
+          <button type="button" class="btn-go" onclick="cekPm(true)">Proses</button>
+        </div>
+      </div>
+
+      <!-- Hasil scan -->
+      <div class="card">
+        <h2>Hasil scan</h2>
+        <p class="muted" id="hasilKosong">Belum ada nomor yang discan.</p>
+        <div id="pmInfo"></div>
+        <ul class="hist" id="hist"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Data batal</h2>
+        <div class="grid">
+          <div class="fg full">
+            <label for="tanggal">Tanggal batal DO *</label>
+            <input type="date" id="tanggal" required>
+          </div>
+          <div class="fg full">
+            <label for="driver">Nama driver *</label>
+            <select id="driver" required onchange="cekLainnya()">
+              <option value="">Pilih driver</option>
+              <option>ALFIAN</option><option>ALIF</option><option>IMAM</option><option>SUGANDA</option>
+              <option>WAHYU</option><option>ARDIAN</option><option>JEFRI</option><option>DANI</option>
+              <option>SURYA</option><option>RIFKY</option><option value="LAINNYA">LAINNYA</option>
+            </select>
+          </div>
+          <div class="fg full hidden" id="boxLainnya">
+            <label for="driverLainnya">Nama driver lainnya *</label>
+            <input type="text" id="driverLainnya" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div class="fg full">
+            <label for="nominal">Nominal faktur (Rp) *</label>
+            <input type="number" id="nominal" min="0" inputmode="numeric" placeholder="Contoh: 1500000" required>
+          </div>
+          <div class="fg full">
+            <label for="alasan">Alasan batal *</label>
+            <select id="alasan" required>
+              <option value="">Pilih alasan</option>
+              <option>Tidak Order</option>
+              <option>Double order</option>
+              <option>Tidak sesuai PO</option>
+              <option>PO Expired</option>
+              <option>Toko Tutup lebih dari 2 Pengiriman</option>
+              <option>Toko tidak punya Uang</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="submit" id="btnSimpan">Simpan</button>
+      <div class="msg" id="msg"></div>
+    </form>
+  </div>
+
+  <!-- REKAP -->
+  <div class="view" id="viewRekap">
+    <div class="kpi">
+      <div class="main"><small>Total kasus</small><b id="kTotal">0</b></div>
+      <div><small>Total nominal</small><b id="kNominal">Rp 0</b></div>
+      <div><small>Kasus hari ini</small><b id="kHariIni">0</b></div>
+    </div>
+    <div class="filters">
+      <input type="date" id="fTgl" onchange="renderRekap()" aria-label="Filter tanggal">
+      <input type="text" id="fCari" placeholder="Cari PM, toko, atau driver" oninput="renderRekap()" aria-label="Cari">
+      <button type="button" class="btn" onclick="resetFilter()">Semua tanggal</button>
+      <button type="button" class="btn" onclick="muatRekap()">↻ Muat ulang</button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Aksi</th><th>Tanggal</th><th>Nomor PM</th><th>Nama toko</th><th>Driver</th><th class="num">Nominal</th><th>Alasan</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="7" class="empty">Memuat data…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  // === GANTI dengan URL Web App hasil deploy Apps Script (berakhiran /exec) ===
+  const API_URL = "https://script.google.com/macros/s/AKfycbz9yU8J-xIr_E2DvM0pz3NRQT-H8q155tCN3BBNoCbaCWo2YXvjzsrGQaVN0YsQ7ZR0/exec";
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const DRIVERS = ["ALFIAN","ALIF","IMAM","SUGANDA","WAHYU","ARDIAN","JEFRI","DANI","SURYA","RIFKY"];
+
+  let kodeAkses = "";
+  try { kodeAkses = localStorage.getItem("kodeAkses") || ""; } catch (e) {}
+  let dataRekap = [];
+  let infoPm = null;
+  let scanner = null;       // kamera langsung
+  let mode = "live";        // "live" | "foto"
+  let suara = true;
+  let jumlahScan = 0;
+  let lastText = "", lastTime = 0;
+  let audioCtx = null;
+  let riwayat = [];
+
+  function hariIni() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  // Sama dengan normPm_ di Code.gs
+  function normPm(raw) {
+    const s = String(raw || "").toUpperCase();
+    const m = s.match(/PM\s*\d{6,}/);
+    if (m) return m[0].replace(/\s+/g, "");
+    const d = s.replace(/[^A-Z0-9]/g, "");
+    return /^\d+$/.test(d) ? "PM" + d : d;
+  }
+
+  async function api(body) {
+    if (!kodeAkses) {
+      kodeAkses = (prompt("Masukkan kode akses:") || "").trim();
+      if (!kodeAkses) throw new Error("Kode akses diperlukan.");
+    }
+    // Tanpa header Content-Type supaya text/plain (tidak memicu preflight CORS)
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(Object.assign({ kode: kodeAkses }, body)) });
+    const data = await res.json();
+    if (data.auth === false) {
+      kodeAkses = "";
+      try { localStorage.removeItem("kodeAkses"); } catch (e) {}
+      throw new Error("Kode akses salah. Coba lagi.");
+    }
+    try { localStorage.setItem("kodeAkses", kodeAkses); } catch (e) {}
+    return data;
+  }
+
+  window.onload = function () {
+    $("tanggal").value = hariIni();
+    $("pm").addEventListener("keydown", function (e) {   // scanner USB/Bluetooth kirim Enter
+      if (e.key === "Enter") { e.preventDefault(); cekPm(true); }
+    });
+    mulaiKamera();
+  };
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) stopKamera();
+    else if ($("viewInput").classList.contains("active")) mulaiKamera();
+  });
+
+  function switchTab(t) {
+    $("tabInput").classList.toggle("active", t === "input");
+    $("tabRekap").classList.toggle("active", t === "rekap");
+    $("viewInput").classList.toggle("active", t === "input");
+    $("viewRekap").classList.toggle("active", t === "rekap");
+    if (t === "rekap") { stopKamera(); muatRekap(); }
+    else mulaiKamera();
+  }
+
+  function cekLainnya() {
+    const lain = $("driver").value === "LAINNYA";
+    $("boxLainnya").classList.toggle("hidden", !lain);
+    $("driverLainnya").required = lain;
+    if (!lain) $("driverLainnya").value = "";
+  }
+
+  /* ===== Suara ===== */
+  function toggleSuara() {
+    suara = !suara;
+    $("chipSuara").textContent = "Suara: " + (suara ? "nyala" : "mati");
+    if (suara) bip(true);
+  }
+  function bip(ok) {
+    if (!suara) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const t = audioCtx.currentTime;
+      const nada = (f, s, d) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = f; g.gain.value = 0.15;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t + s); o.stop(t + s + d);
+      };
+      if (ok) nada(1200, 0, 0.12); else { nada(300, 0, 0.15); nada(300, 0.2, 0.15); }
+    } catch (e) {}
+  }
+
+  /* ===== Kamera ===== */
+  function formatBarcode() {
+    const F = Html5QrcodeSupportedFormats;
+    return [F.CODE_128, F.CODE_39, F.CODE_93, F.EAN_13, F.EAN_8, F.ITF, F.QR_CODE];
+  }
+
+  function pesanKamera(teks) {
+    const m = $("camMsg");
+    m.textContent = teks || "";
+    m.classList.toggle("show", !!teks);
+  }
+
+  async function mulaiKamera() {
+    if (scanner || mode !== "live") return;
+    pesanKamera("Membuka kamera…");
+    try {
+      scanner = new Html5Qrcode("reader", { formatsToSupport: formatBarcode(), useBarCodeDetectorIfSupported: true, verbose: false });
+      await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScan, function () {});
+      pesanKamera("");
+    } catch (e) {
+      scanner = null;
+      pesanKamera("Kamera tidak bisa dibuka. Izinkan akses kamera, atau pakai \"Ganti cara scan\" / ketik manual.");
+    }
+  }
+
+  async function stopKamera() {
+    if (!scanner) return;
+    const s = scanner; scanner = null;
+    try { if (s.isScanning) await s.stop(); s.clear(); } catch (e) {}
+  }
+
+  async function gantiMode() {
+    if (mode === "live") {
+      mode = "foto";
+      await stopKamera();
+      $("camBox").classList.add("hidden");
+      $("photoPanel").classList.add("show");
+      $("chipMode").textContent = "Pakai kamera langsung";
+    } else {
+      mode = "live";
+      $("photoPanel").classList.remove("show");
+      $("camBox").classList.remove("hidden");
+      $("chipMode").textContent = "Ganti cara scan";
+      mulaiKamera();
+    }
+  }
+
+  function onScan(text) {
+    const pm = normPm(text);
+    if (!pm) return;
+    const now = Date.now();
+    if (pm === lastText && now - lastTime < 4000) { lastTime = now; return; } // abaikan scan ganda
+    lastText = pm; lastTime = now;
+    jumlahScan++;
+    $("cnt").textContent = jumlahScan + " discan";
+    if (navigator.vibrate) navigator.vibrate(60);
+    $("pm").value = pm;
+    cekPm(true);
+  }
+
+  async function scanFoto(input) {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file) return;
+    try {
+      const reader = new Html5Qrcode("readerFile", { formatsToSupport: formatBarcode(), useBarCodeDetectorIfSupported: true, verbose: false });
+      const text = await reader.scanFile(file, false);
+      try { reader.clear(); } catch (e) {}
+      onScan(text);
+    } catch (e) {
+      bip(false);
+      setInfo("err", "Barcode tidak terbaca pada foto. Coba foto lebih dekat dan terang, atau ketik manual.");
+    }
+  }
+
+  /* ===== Cek PM ke Master Data ===== */
+  function setInfo(cls, html) {
+    $("hasilKosong").classList.add("hidden");
+    $("pmInfo").innerHTML = "<div class='info " + cls + "'>" + html + "</div>";
+  }
+
+  function catat(pm, ok, teks) {
+    riwayat.unshift({ pm: pm, ok: ok, teks: teks });
+    riwayat = riwayat.slice(0, 5);
+    $("hist").innerHTML = riwayat.map(r =>
+      "<li><b>" + esc(r.pm) + "</b><span class='" + (r.ok ? "st-ok" : "st-no") + "'>" + esc(r.teks) + "</span></li>").join("");
+  }
+
+  async function cekPm(bunyi) {
+    const pm = normPm($("pm").value);
+    infoPm = null;
+    if (!pm || pm.length < 6) { setInfo("warn", "Nomor PM belum lengkap."); return; }
+    $("pm").value = pm;
+    setInfo("warn", "Mengecek " + esc(pm) + "…");
+    try {
+      const r = await api({ action: "lookup", pm: pm });
+      if (!r.success) { setInfo("err", esc(r.message)); if (bunyi) bip(false); return; }
+      infoPm = r;
+      if (!r.found) {
+        setInfo("err", esc(pm) + " <b>tidak ditemukan</b> di Master Data. Periksa lagi nomornya.");
+        catat(pm, false, "tidak ditemukan");
+        if (bunyi) bip(false);
+        return;
+      }
+      let h = "<b>" + esc(pm) + "</b><br>Toko: <b>" + esc(r.namaToko) + "</b>";
+      if (r.duplikat) h += "<br>⚠ Nomor ini muncul lebih dari sekali di Master Data. Baris pertama yang dipakai.";
+      if (r.sudahAda) {
+        h += "<br>⚠ Sudah ada data batal: " + esc(r.existing.alasan) + " (" + esc(r.existing.tanggal) + ", " + esc(r.existing.driver) + "). Menyimpan akan menimpa.";
+        setInfo("warn", h);
+      } else setInfo("ok", h);
+      catat(pm, true, r.namaToko);
+      if (bunyi) bip(true);
+    } catch (e) { setInfo("err", esc(e.message)); }
+  }
+
+  /* ===== Simpan ===== */
+  function tampilMsg(cls, text) { const m = $("msg"); m.className = "msg " + cls; m.textContent = text; }
+
+  async function simpan(timpa) {
+    const pm = normPm($("pm").value);
+    let driver = $("driver").value;
+    if (driver === "LAINNYA") driver = $("driverLainnya").value.trim().toUpperCase();
+
+    if (infoPm && infoPm.found === false) { tampilMsg("err", pm + " tidak ditemukan di Master Data."); return; }
+    $("btnSimpan").disabled = true;
+    $("msg").className = "msg";
+    try {
+      const r = await api({
+        action: "simpan", timpa: timpa, pm: pm,
+        tanggal: $("tanggal").value, driver: driver,
+        nominal: $("nominal").value, alasan: $("alasan").value
+      });
+      if (r.konfirmasi) {
+        if (confirm(r.message)) { $("btnSimpan").disabled = false; return simpan(true); }
+        tampilMsg("err", "Dibatalkan, data tidak diubah.");
+      } else if (r.success) {
+        tampilMsg("ok", r.message + (r.polaKosong ? " (Kronologi/CAPA kosong: alasan ini belum punya pola.)" : ""));
+        $("form").reset();
+        $("tanggal").value = hariIni();
+        cekLainnya();
+        $("pmInfo").innerHTML = "";
+        infoPm = null;
+        lastText = "";   // PM yang sama boleh discan lagi
+      } else tampilMsg("err", r.message);
+    } catch (e) { tampilMsg("err", "Gagal: " + e.message); }
+    $("btnSimpan").disabled = false;
+  }
+
+  /* ===== Rekap ===== */
+  async function muatRekap() {
+    $("tbody").innerHTML = '<tr><td colspan="7" class="empty">Memuat data…</td></tr>';
+    try {
+      const r = await api({ action: "list" });
+      if (!r.success) throw new Error(r.message);
+      dataRekap = r.list || [];
+      renderRekap();
+    } catch (e) {
+      $("tbody").innerHTML = '<tr><td colspan="7" class="empty">Gagal memuat: ' + esc(e.message) + "</td></tr>";
+    }
+  }
+
+  function resetFilter() { $("fTgl").value = ""; $("fCari").value = ""; renderRekap(); }
+
+  function renderRekap() {
+    const tgl = $("fTgl").value;
+    const kw = $("fCari").value.toUpperCase();
+    const list = dataRekap.filter(x =>
+      (!tgl || x.tanggal === tgl) &&
+      (!kw || (x.pm + " " + x.namaToko + " " + x.driver).toUpperCase().includes(kw)));
+
+    const total = list.reduce((a, x) => a + (Number(x.nominal) || 0), 0);
+    $("kTotal").textContent = list.length + " kasus";
+    $("kNominal").textContent = "Rp " + total.toLocaleString("id-ID");
+    $("kHariIni").textContent = dataRekap.filter(x => x.tanggal === hariIni()).length + " kasus";
+
+    $("tbody").innerHTML = list.length ? list.map(x =>
+      "<tr><td><button type='button' class='edit' data-pm='" + esc(x.pm) + "' onclick='editPm(this.dataset.pm)'>Edit</button></td>" +
+      "<td>" + esc(x.tanggal) + "</td><td><b>" + esc(x.pm) + "</b></td><td>" + esc(x.namaToko) + "</td>" +
+      "<td>" + esc(x.driver) + "</td><td class='num'>Rp " + (Number(x.nominal) || 0).toLocaleString("id-ID") + "</td>" +
+      "<td><span class='badge'>" + esc(x.alasan) + "</span></td></tr>").join("")
+      : '<tr><td colspan="7" class="empty">Tidak ada data pada filter ini.</td></tr>';
+  }
+
+  function editPm(pm) {
+    const x = dataRekap.find(d => d.pm === pm);
+    if (!x) return;
+    switchTab("input");
+    $("tanggal").value = x.tanggal;
+    $("pm").value = x.pm;
+    $("nominal").value = x.nominal;
+    $("alasan").value = x.alasan;
+    if (DRIVERS.includes(x.driver)) { $("driver").value = x.driver; cekLainnya(); }
+    else { $("driver").value = "LAINNYA"; cekLainnya(); $("driverLainnya").value = x.driver; }
+    cekPm(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+</script>
+</body>
+</html>
